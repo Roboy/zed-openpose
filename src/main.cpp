@@ -179,7 +179,7 @@ int main(int argc, char **argv) {
     // ------------------------- INITIALIZATION -------------------------
     // Read Google flags (user defined configuration)
     outputSize = op::flagsToPoint("-1x-1");
-    netInputSize = op::flagsToPoint("656x368");
+    netInputSize = op::flagsToPoint("368x304"); //656x368
 
     cout << netInputSize.x << "x" << netInputSize.y << endl;
     netOutputSize = netInputSize;
