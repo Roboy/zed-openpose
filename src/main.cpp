@@ -10,6 +10,7 @@
 // Sample includes
 #include "GLViewer.hpp"
 #include "utils.hpp"
+#include "../../../../../../../opt/ros/melodic/include/ros/forwards.h"
 
 // GFlags: DEFINE_bool, _int32, _int64, _uint64, _double, _string
 #include <gflags/gflags.h>
@@ -19,6 +20,14 @@
 #include <opencv2/imgproc.hpp>
 #include <cv.hpp>
 
+#include <ros/ros.h>
+#include <tf/transform_broadcaster.h>
+#include <roboy_simulation_msgs/BodyPart.h>
+#include <common_utilities/rviz_visualization.hpp>
+ros::NodeHandlePtr nh;
+ros::Publisher pose_pub;
+boost::shared_ptr<tf::TransformBroadcaster> br;
+boost::shared_ptr<rviz_visualization> viz;
 float thres_score = 0.6;
 
 // Debugging
@@ -141,7 +150,7 @@ int main(int argc, char **argv) {
     initParameters.camera_resolution = RESOLUTION_HD2K;
     initParameters.depth_mode = DEPTH_MODE_ULTRA; // Might be GPU memory intensive combine with openpose
     initParameters.coordinate_units = unit;
-    initParameters.coordinate_system = COORDINATE_SYSTEM_RIGHT_HANDED_Y_UP;
+    initParameters.coordinate_system = COORDINATE_SYSTEM_RIGHT_HANDED_Z_UP_X_FWD;
     initParameters.sdk_verbose = 0;
     initParameters.depth_stabilization = true;
     initParameters.svo_real_time_mode = 1;
@@ -184,6 +193,15 @@ int main(int argc, char **argv) {
     if (FLAGS_alpha_pose < 0. || FLAGS_alpha_pose > 1.) op::error("Alpha value for blending must be in the range [0,1].", __LINE__, __FUNCTION__, __FILE__);
     if (FLAGS_scale_gap <= 0. && FLAGS_scale_number > 1) op::error("Incompatible flag configuration: scale_gap must be greater than 0 or scale_number = 1.", __LINE__, __FUNCTION__, __FILE__);
 
+    if (!ros::isInitialized()) {
+        int argc = 0;
+        char **argv = NULL;
+        ros::init(argc, argv, "zed_openpose");
+    }
+    nh = ros::NodeHandlePtr(new ros::NodeHandle);
+    pose_pub = nh->advertise<roboy_simulation_msgs::BodyPart>("/zed_openpose/persons",1);
+    br.reset(new tf::TransformBroadcaster);
+    viz.reset(new rviz_visualization);
     // Start ZED callback
     startZED();
 
@@ -259,6 +277,9 @@ void fill_people_ogl(op::Array<float> &poseKeypoints, sl::Mat &xyz) {
     const auto numberPeopleDetected = poseKeypoints.getSize(0);
     const auto numberBodyParts = poseKeypoints.getSize(1);
     std::vector<int> partsLink;
+    std::vector<string> bodyPartNames;
+    bool visualize_persons;
+    nh->getParam("visualize_persons",visualize_persons);
 
     switch (model_kp_number) {
         case 15:
@@ -297,9 +318,41 @@ void fill_people_ogl(op::Array<float> &poseKeypoints, sl::Mat &xyz) {
         case 25:
             //https://github.com/CMU-Perceptual-Computing-Lab/openpose/blob/master/doc/media/keypoints_pose_25.png
             partsLink = {
-                0, 1, 1, 2, 2, 3, 3, 4, 1, 5, 5, 6, 6, 7, 1, 8, 8, 9, 8, 12, 12,
-                13, 13, 14, 14, 19, 19, 20, 14, 21, 8, 9, 9, 10, 10, 11, 11, 24,
-                11, 22, 22, 23, 0, 16, 0, 15, 15, 17, 16, 18
+                0, 1, //0
+                1, 2, //2
+                2, 3, //4
+                3, 4, //6
+                1, 5, //8
+                5, 6, //10
+                6, 7, //12
+                1, 8, //14
+                8, 9, //16
+                8, 12, //18
+                12, 13, //20
+                13, 14, //22
+                14, 19, //24
+                19, 20, //26
+                14, 21, //28
+                8, 9,   //30
+                9, 10,  //32
+                10, 11, //34
+                11, 24, //36
+                11, 22, //38
+                22, 23, //40
+                0, 16,  //42
+                0, 15,  //44
+                15, 17, //46
+                16, 18  //48
+            };
+            bodyPartNames = {"neck",
+                             "shoulder_right","arm_right_upper","arm_right_lower",
+                             "shoulder_left","arm_left_upper","arm_left_lower",
+                              "torso",
+                              "hip_right","hip_left","leg_left_upper","leg_left_lower"
+                              "foot_left","foot_left_toes","foot_left_heel",
+                              "hip_right","leg_right_upper","leg_right_lower",
+                              "foot_left_heel","foot_left","foot_left_toes",
+                              "left_eye", "right_eye", "right_ear", "left_ear"
             };
             break;
 
@@ -310,6 +363,7 @@ void fill_people_ogl(op::Array<float> &poseKeypoints, sl::Mat &xyz) {
 
     std::vector<sl::float3> vertices;
     std::vector<sl::float3> clr;
+    roboy_simulation_msgs::BodyPart msg;
 
     for (int person = 0; person < numberPeopleDetected; person++) {
 
@@ -318,7 +372,7 @@ void fill_people_ogl(op::Array<float> &poseKeypoints, sl::Mat &xyz) {
         sl::float4 center_gravity(0, 0, 0, 0);
         int count = 0;
         float score;
-
+        msg.id = person;
         for (int k = 0; k < numberBodyParts; k++) {
 
             score = poseKeypoints[{person, k, 2}
@@ -344,6 +398,19 @@ void fill_people_ogl(op::Array<float> &poseKeypoints, sl::Mat &xyz) {
             if (score >= FLAGS_render_threshold && isfinite(keypoints_position[k].z)) {
                 center_gravity += keypoints_position[k];
                 count++;
+                keypoints_position[k].x;
+                geometry_msgs::Point p;
+                p.x = keypoints_position[k].x;
+                p.y = keypoints_position[k].y;
+                p.z = keypoints_position[k].z;
+                msg.link_id = k;
+                pose_pub.publish(msg);
+                tf::Transform transform;
+                transform.setOrigin( tf::Vector3(keypoints_position[k].z, keypoints_position[k].y, keypoints_position[k].x) );
+                transform.setRotation( tf::Quaternion(0, 0, 0) );
+                char str[20];
+                sprintf(str,"%d_%d", person, k);
+                br->sendTransform(tf::StampedTransform(transform, ros::Time::now(), "world", str));
             }
         }
 
@@ -388,6 +455,13 @@ void fill_people_ogl(op::Array<float> &poseKeypoints, sl::Mat &xyz) {
                 vertices.emplace_back(v2.x, v2.y, v2.z);
                 clr.push_back(generateColor(person));
                 clr.push_back(generateColor(person));
+                if(visualize_persons) {
+                    Eigen::Vector3d p1(v1.z, v1.y, v1.x);
+                    Eigen::Vector3d p2(v2.z, v2.y, v2.x);
+                    Eigen::Vector3d dir = p2 - p1;
+                    viz->publishRay(p1, dir, "world", bodyPartNames[partsLink[part]].c_str(), part, COLOR(0, 1, 0, 1),
+                                    1);
+                }
             }
         }
     }

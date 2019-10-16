@@ -1,4 +1,4 @@
-SET(execName zed_openpose)
+SET(execName zed-openpose)
 cmake_minimum_required(VERSION 2.4)
 PROJECT(${execName})
 
@@ -8,6 +8,27 @@ if(COMMAND cmake_policy)
 endif(COMMAND cmake_policy)
 
 SET(EXECUTABLE_OUTPUT_PATH ".")
+
+find_package(catkin REQUIRED COMPONENTS
+        roscpp
+        roslib
+        rospack
+        rospy
+        std_msgs geometry_msgs
+        message_generation
+        common_utilities
+        roboy_simulation_msgs
+        )
+
+catkin_package( CATKIN_DEPENDS roboy_simulation_msgs common_utilities roslib
+        INCLUDE_DIRS include)
+
+include_directories(${catkin_INCLUDE_DIRS})
+
+# Eigen
+find_package(PkgConfig REQUIRED )
+pkg_check_modules(EIGEN3 REQUIRED eigen3)
+include_directories(${EIGEN3_INCLUDE_DIRS})
 
 find_package(ZED 2 REQUIRED)
 find_package(GLUT REQUIRED)
@@ -41,7 +62,7 @@ FILE(GLOB_RECURSE SRC_FILES src/*.cpp)
 FILE(GLOB_RECURSE HDR_FILES include/*.hpp)
 
 ADD_EXECUTABLE(${execName} ${HDR_FILES} ${SRC_FILES})
-
+add_dependencies(${execName} roboy_simulation_msgs_generate_messages_cpp)
 target_link_libraries(${execName}
                         ${OpenPose_LIBS} ${GLOG_LIBRARY} ${GFLAGS_LIBRARY} ${Caffe_LIBS}
                         ${ZED_LIBRARIES}
@@ -50,4 +71,5 @@ target_link_libraries(${execName}
                         ${SPECIAL_OS_LIBS}
                         ${OPENGL_LIBRARIES}
                         ${OpenCV_LIBRARIES}
-                        ${CUDA_CUDA_LIBRARY} ${CUDA_CUDART_LIBRARY} ${CUDA_NPP_LIBRARIES_ZED} )
+                        ${CUDA_CUDA_LIBRARY} ${CUDA_CUDART_LIBRARY} ${CUDA_NPP_LIBRARIES_ZED}
+                        -lGLEW ${catkin_LIBRARIES})
