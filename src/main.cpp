@@ -16,6 +16,8 @@
 
 // OpenPose dependencies
 #include <openpose/headers.hpp>
+#include <opencv2/imgproc.hpp>
+#include <cv.hpp>
 
 float thres_score = 0.6;
 
@@ -97,7 +99,7 @@ bool need_new_image = true;
 bool ready_to_start = false;
 int model_kp_number = 25;
 
-#define ENABLE_FLOOR_PLANE_DETECTION 1 // Might be disable to use older ZED SDK
+#define ENABLE_FLOOR_PLANE_DETECTION 0 // Might be disable to use older ZED SDK
 
 // Debug options
 #define DISPLAY_BODY_BARYCENTER 0
@@ -167,12 +169,12 @@ int main(int argc, char **argv) {
     cout << "OpenPose : loading models..." << endl;
     // ------------------------- INITIALIZATION -------------------------
     // Read Google flags (user defined configuration)
-    outputSize = op::flagsToPoint(FLAGS_output_resolution, "-1x-1");
-    netInputSize = op::flagsToPoint(FLAGS_net_resolution, "-1x368");
+    outputSize = op::flagsToPoint("-1x-1");
+    netInputSize = op::flagsToPoint("656x368");
 
     cout << netInputSize.x << "x" << netInputSize.y << endl;
     netOutputSize = netInputSize;
-    poseModel = op::flagsToPoseModel(FLAGS_model_pose);
+    poseModel = op::flagsToPoseModel("BODY_25");
 
     if (FLAGS_model_pose == "COCO") model_kp_number = 18;
     else if (FLAGS_model_pose.find("MPI") != std::string::npos) model_kp_number = 15;
@@ -477,10 +479,10 @@ void run() {
                     data_out_mtx.lock();
                     outputArray2 = outputArray;
                     data_out_mtx.unlock();
-                    outputArray = cvMatToOpOutput.createArray(inputImage, scaleInputToOutput, outputResolution);
+                    outputArray = cvMatToOpOutput.createArray(OP_CV2OPMAT(inputImage), scaleInputToOutput, outputResolution);
                 }
                 data_in_mtx.lock();
-                netInputArray = cvMatToOpInput.createArray(inputImage, scaleInputToNetInputs, netInputSizes);
+                netInputArray = cvMatToOpInput.createArray(OP_CV2OPMAT(inputImage), scaleInputToNetInputs, netInputSizes);
                 need_new_image = false;
                 data_in_mtx.unlock();
 
@@ -507,7 +509,7 @@ void run() {
 
                 // OpenPose output format to cv::Mat
                 if (!outputArray2.empty())
-                    outputImage = opOutputToCvMat.formatToCvMat(outputArray2);
+                    outputImage = OP_OP2CVMAT(opOutputToCvMat.formatToCvMat(outputArray2));
                 data_out_mtx.unlock();
                 // Show results
                 if (!outputArray2.empty())

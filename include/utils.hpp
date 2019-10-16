@@ -15,6 +15,7 @@
 
 #include <sl/Camera.hpp>
 #include <openpose/headers.hpp>
+#include <opencv2/core/mat.hpp>
 
 #ifndef M_PI
 #define M_PI 3.1416f
