@@ -55,7 +55,7 @@ DEFINE_int32(scale_number, 1, "Number of scales to average.");
 DEFINE_bool(disable_blending, false, "If enabled, it will render the results (keypoint skeletons or heatmaps) on a black"
         " background, instead of being rendered into the original image. Related: `part_to_show`,"
         " `alpha_pose`, and `alpha_pose`.");
-DEFINE_double(render_threshold, 0.12, "Only estimated keypoints whose score confidences are higher than this threshold will be"
+DEFINE_double(render_threshold, 0.4, "Only estimated keypoints whose score confidences are higher than this threshold will be"
         " rendered. Generally, a high threshold (> 0.5) will only render very clear body parts;"
         " while small thresholds (~0.1) will also output guessed and occluded keypoints, but also"
         " more false positives (i.e. wrong detections).");
@@ -405,12 +405,15 @@ void fill_people_ogl(op::Array<float> &poseKeypoints, sl::Mat &xyz) {
                 p.z = keypoints_position[k].z;
                 msg.link_id = k;
                 pose_pub.publish(msg);
-                tf::Transform transform;
-                transform.setOrigin( tf::Vector3(keypoints_position[k].z, keypoints_position[k].y, keypoints_position[k].x) );
-                transform.setRotation( tf::Quaternion(0, 0, 0) );
-                char str[20];
-                sprintf(str,"%d_%d", person, k);
-                br->sendTransform(tf::StampedTransform(transform, ros::Time::now(), "world", str));
+                if(k>0 && k<8) {
+                    tf::Transform transform;
+                    transform.setOrigin(
+                            tf::Vector3(keypoints_position[k].z, -keypoints_position[k].y, keypoints_position[k].x));
+                    transform.setRotation(tf::Quaternion(0, 0, 0));
+                    char str[20];
+                    sprintf(str, "%d_%d", person, k);
+                    br->sendTransform(tf::StampedTransform(transform, ros::Time::now(), "world", str));
+                }
             }
         }
 
